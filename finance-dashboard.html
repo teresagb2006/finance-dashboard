@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finance Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg:#0e0e0f;--surface:#161618;--surface2:#1e1e21;--border:rgba(255,255,255,0.07);
+    --text:#f0ede8;--muted:#6b6a72;--accent:#c8f060;--red:#ff5f57;--green:#38d9a9;
+    --blue:#74b9ff;--amber:#ffd43b;--mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
+
+  /* Token screen */
+  #token-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:1.5rem}
+  .token-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:2rem;width:100%;max-width:440px}
+  .token-box h2{font-size:18px;font-weight:500;margin-bottom:.4rem}
+  .token-box p{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:1.5rem}
+  .token-box input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;margin-bottom:1rem}
+  .token-box input:focus{border-color:var(--accent)}
+  .token-box button{width:100%;background:var(--accent);color:#0e0e0f;border:none;border-radius:8px;padding:.75rem;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+  .token-box button:hover{opacity:.9}
+  .token-hint{font-size:11px;color:var(--muted);margin-top:1rem;font-family:var(--mono);line-height:1.6}
+
+  /* Loading */
+  #loading{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+  .spinner{width:32px;height:32px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #loading p{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.08em}
+
+  /* Error */
+  #error-bar{display:none;background:rgba(255,95,87,.12);border:1px solid rgba(255,95,87,.3);border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:13px;color:var(--red)}
+
+  /* App */
+  #app{display:none;max-width:960px;margin:0 auto;padding:2rem 1.5rem 4rem}
+  header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2.5rem}
+  header h1{font-size:13px;font-family:var(--mono);color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+  #last-updated{font-size:11px;font-family:var(--mono);color:var(--muted);opacity:.6}
+  .refresh-btn{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;font-family:var(--mono);padding:4px 10px;cursor:pointer;margin-left:12px}
+  .refresh-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:2rem}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.25rem;position:relative;overflow:hidden}
+  .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-accent,var(--border))}
+  .kpi-label{font-size:11px;font-family:var(--mono);color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px}
+  .kpi-val{font-size:26px;font-weight:600;line-height:1}
+  .kpi-sub{font-size:11px;color:var(--muted);margin-top:6px;font-family:var(--mono)}
+
+  .section-label{font-size:11px;font-family:var(--mono);color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem}
+  .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:2rem}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem}
+  .card-full{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin-bottom:2rem}
+
+  .budget-list{display:flex;flex-direction:column;gap:14px}
+  .budget-header{display:flex;justify-content:space-between;margin-bottom:6px}
+  .budget-name{font-size:13px;font-weight:500}
+  .budget-nums{font-size:11px;font-family:var(--mono);color:var(--muted)}
+  .bar-bg{height:4px;background:var(--surface2);border-radius:2px;overflow:hidden}
+  .bar-fill{height:4px;border-radius:2px}
+  .badge{display:inline-block;font-size:10px;font-family:var(--mono);padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle}
+  .badge-over{background:rgba(255,95,87,.15);color:var(--red)}
+  .badge-ok{background:rgba(56,217,169,.15);color:var(--green)}
+
+  .txn-list{display:flex;flex-direction:column}
+  .txn{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}
+  .txn:last-child{border-bottom:none}
+  .txn-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+  .txn-info{flex:1;min-width:0}
+  .txn-label{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .txn-meta{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+  .txn-amount{font-size:14px;font-weight:600;font-family:var(--mono);white-space:nowrap}
+
+  .accounts-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:2rem}
+  .account-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem 1.5rem}
+  .account-name{font-size:11px;font-family:var(--mono);color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
+  .account-bal{font-size:32px;font-weight:600;color:var(--accent)}
+
+  @media(max-width:600px){
+    .kpis{grid-template-columns:1fr 1fr}
+    .chart-grid{grid-template-columns:1fr}
+    .accounts-grid{grid-template-columns:1fr 1fr}
+  }
+</style>
+</head>
+<body>
+
+<div id="token-screen">
+  <div class="token-box">
+    <h2>Finance Dashboard</h2>
+    <p>Enter your Notion integration token to load your data. It's stored only in your browser — never sent anywhere except Notion.</p>
+    <div id="error-bar"></div>
+    <input type="password" id="token-input" placeholder="ntn_..." autocomplete="off" />
+    <button onclick="startDashboard()">Connect to Notion →</button>
+    <div class="token-hint">Your token starts with ntn_ — find it at notion.so/profile/integrations</div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p>syncing with notion...</p>
+</div>
+
+<div id="app">
+  <header>
+    <h1>finance / overview</h1>
+    <div>
+      <span id="last-updated"></span>
+      <button class="refresh-btn" onclick="loadData()">↻ refresh</button>
+    </div>
+  </header>
+  <div class="section-label">accounts</div>
+  <div class="accounts-grid" id="accounts-grid"></div>
+  <div class="section-label">summary</div>
+  <div class="kpis" id="kpis"></div>
+  <div class="section-label">balance over time</div>
+  <div class="card-full"><div style="position:relative;height:220px"><canvas id="balanceChart"></canvas></div></div>
+  <div class="section-label">breakdown</div>
+  <div class="chart-grid">
+    <div class="card">
+      <div class="section-label" style="margin-bottom:.5rem">monthly income vs expenses</div>
+      <div style="position:relative;height:180px"><canvas id="monthlyChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-label" style="margin-bottom:.5rem">spending by category</div>
+      <div style="position:relative;height:180px"><canvas id="catChart"></canvas></div>
+    </div>
+  </div>
+  <div class="section-label">budget status</div>
+  <div class="card-full"><div class="budget-list" id="budget-list"></div></div>
+  <div class="section-label">transactions</div>
+  <div class="card-full"><div class="txn-list" id="txn-list"></div></div>
+</div>
+
+<script>
+const DB = {
+  expenses:   '313e7826257281049dfdd4bca17a3817',
+  incomes:    '313e7826257281c6958ed3f6a7926a81',
+  categories: '313e7826257281f0960ff44dd4205270',
+  accounts:   '313e7826257281a5bc61c70b9dcb06f9'
+};
+
+let TOKEN = '';
+let charts = {};
+
+function startDashboard() {
+  TOKEN = document.getElementById('token-input').value.trim();
+  if (!TOKEN.startsWith('ntn_') && !TOKEN.startsWith('secret_')) {
+    showError('Token should start with ntn_ — please check and try again.');
+    return;
+  }
+  localStorage.setItem('notion_token', TOKEN);
+  document.getElementById('token-screen').style.display = 'none';
+  loadData();
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-bar');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function queryDB(id) {
+  // Use notionapi.splitbee.io — a reliable public CORS proxy for Notion
+  const res = await fetch(`https://notion-api.splitbee.io/v1/table/${id}`, {
+    headers: { 'Authorization': 'Bearer ' + TOKEN }
+  });
+  if (!res.ok) throw new Error(`Database ${id}: ${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+async function queryDBOfficial(id) {
+  const res = await fetch(`https://corsproxy.io/?${encodeURIComponent('https://api.notion.com/v1/databases/' + id + '/query')}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + TOKEN,
+      'Notion-Version': '2022-06-28',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ page_size: 100 })
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`DB ${id}: ${res.status} — ${txt.slice(0,120)}`);
+  }
+  const data = await res.json();
+  if (data.object === 'error') throw new Error(`Notion: ${data.message}`);
+  return data.results;
+}
+
+function prop(page, name) {
+  const p = page.properties?.[name];
+  if (!p) return null;
+  switch(p.type) {
+    case 'title': return p.title?.map(t=>t.plain_text).join('') || '';
+    case 'rich_text': return p.rich_text?.map(t=>t.plain_text).join('') || '';
+    case 'number': return p.number;
+    case 'select': return p.select?.name ?? null;
+    case 'date': return p.date?.start ?? null;
+    case 'formula': return p.formula?.number ?? p.formula?.string ?? null;
+    case 'rollup': {
+      if (p.rollup?.type === 'number') return p.rollup.number;
+      if (p.rollup?.type === 'array') return p.rollup.array?.reduce((s,i)=> s+(i.number||0),0) ?? 0;
+      return null;
+    }
+    default: return null;
+  }
+}
+
+function fmtDate(str) {
+  if (!str) return '';
+  return new Date(str).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'});
+}
+
+const catEmoji = {'Social':'🧡','Beauty & Health':'💚','Transportation':'🚌','Clothing':'👗','Snacks':'☕','Uni material':'📚','Income':'💰'};
+const catColor = {'Social':'#74b9ff','Beauty & Health':'#38d9a9','Transportation':'#ffd43b','Clothing':'#f78fb3','Snacks':'#a29bfe','Uni material':'#fd9644','Income':'#c8f060'};
+
+function destroyCharts() {
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+}
+
+async function loadData() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loading').style.display = 'flex';
+
+  try {
+    const [expPages, incPages, catPages, accPages] = await Promise.all([
+      queryDBOfficial(DB.expenses),
+      queryDBOfficial(DB.incomes),
+      queryDBOfficial(DB.categories),
+      queryDBOfficial(DB.accounts)
+    ]);
+
+    destroyCharts();
+    document.getElementById('accounts-grid').innerHTML = '';
+    document.getElementById('kpis').innerHTML = '';
+    document.getElementById('budget-list').innerHTML = '';
+    document.getElementById('txn-list').innerHTML = '';
+
+    const expenses = expPages.map(p=>({
+      label: prop(p,'Expense')||prop(p,'Name')||'—',
+      amount: Math.abs(prop(p,'Amount')||0),
+      date: prop(p,'Date'),
+      category: prop(p,'Category'),
+      account: prop(p,'Account'),
+      type:'exp'
+    })).filter(e=>e.amount>0);
+
+    const incomes = incPages.map(p=>({
+      label: prop(p,'Income')||prop(p,'Name')||'—',
+      amount: Math.abs(prop(p,'Amount')||0),
+      date: prop(p,'Dates')||prop(p,'Date'),
+      source: prop(p,'Source'),
+      account: prop(p,'Accounts')||prop(p,'Account'),
+      category:'Income', type:'inc'
+    })).filter(i=>i.amount>0);
+
+    const categories = catPages.map(p=>({
+      name: prop(p,'Category')||prop(p,'Name'),
+      budget: Math.abs(prop(p,'Monthly Budget')||0),
+      spent: Math.abs(prop(p,'Total spent')||0),
+      months: prop(p,'Total months')||1
+    }));
+
+    const accounts = accPages.map(p=>({
+      name: prop(p,'Account')||prop(p,'Name'),
+      balance: prop(p,'Balance')||0
+    }));
+
+    // Accounts
+    const accGrid = document.getElementById('accounts-grid');
+    let totalBalance = 0;
+    accounts.forEach(a=>{
+      const bal = parseFloat(a.balance)||0;
+      totalBalance += bal;
+      accGrid.innerHTML += `<div class="account-card">
+        <div class="account-name">${a.name||'Account'}</div>
+        <div class="account-bal">€${bal.toFixed(2)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">current balance</div>
+      </div>`;
+    });
+
+    // KPIs
+    const totalInc = incomes.reduce((s,i)=>s+i.amount,0);
+    const totalExp = expenses.reduce((s,e)=>s+e.amount,0);
+    const net = totalInc - totalExp;
+    document.getElementById('kpis').innerHTML = `
+      <div class="kpi" style="--kpi-accent:var(--accent)">
+        <div class="kpi-label">Total balance</div>
+        <div class="kpi-val" style="color:var(--accent)">€${totalBalance.toFixed(2)}</div>
+        <div class="kpi-sub">cash + card</div>
+      </div>
+      <div class="kpi" style="--kpi-accent:var(--green)">
+        <div class="kpi-label">Total income</div>
+        <div class="kpi-val" style="color:var(--green)">€${totalInc.toFixed(2)}</div>
+        <div class="kpi-sub">${incomes.length} transactions</div>
+      </div>
+      <div class="kpi" style="--kpi-accent:var(--red)">
+        <div class="kpi-label">Total expenses</div>
+        <div class="kpi-val" style="color:var(--red)">€${totalExp.toFixed(2)}</div>
+        <div class="kpi-sub">${expenses.length} transactions</div>
+      </div>
+      <div class="kpi" style="--kpi-accent:${net>=0?'var(--green)':'var(--red)'}">
+        <div class="kpi-label">Net flow</div>
+        <div class="kpi-val" style="color:${net>=0?'var(--green)':'var(--red)'}">
+          ${net>=0?'+':'−'}€${Math.abs(net).toFixed(2)}
+        </div>
+        <div class="kpi-sub">${net>=0?'surplus':'deficit'}</div>
+      </div>`;
+
+    // Balance over time
+    const byDate = {};
+    expenses.filter(e=>e.date).forEach(e=>{ byDate[e.date]=(byDate[e.date]||0)-e.amount; });
+    incomes.filter(i=>i.date).forEach(i=>{ byDate[i.date]=(byDate[i.date]||0)+i.amount; });
+    const sortedDates = Object.keys(byDate).sort();
+    const initialBal = totalBalance - net;
+    let runBal = initialBal;
+    const balLabels = [], balValues = [];
+    balLabels.push(sortedDates[0]); balValues.push(parseFloat(initialBal.toFixed(2)));
+    sortedDates.forEach(d=>{ runBal+=byDate[d]; balLabels.push(d); balValues.push(parseFloat(runBal.toFixed(2))); });
+
+    charts.balance = new Chart(document.getElementById('balanceChart'),{
+      type:'line',
+      data:{labels:balLabels, datasets:[{data:balValues,borderColor:'#c8f060',backgroundColor:'rgba(200,240,96,0.06)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:'#c8f060',borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'€'+c.parsed.y.toFixed(2),title:c=>fmtDate(c[0].label)}}},
+        scales:{x:{ticks:{color:'#6b6a72',maxTicksLimit:8},grid:{color:'rgba(255,255,255,0.04)'}},
+                y:{ticks:{color:'#6b6a72',callback:v=>'€'+v},grid:{color:'rgba(255,255,255,0.04)'}}}}
+    });
+
+    // Monthly
+    const months={};
+    expenses.filter(e=>e.date).forEach(e=>{const m=e.date.slice(0,7);months[m]=months[m]||{inc:0,exp:0};months[m].exp+=e.amount;});
+    incomes.filter(i=>i.date).forEach(i=>{const m=i.date.slice(0,7);months[m]=months[m]||{inc:0,exp:0};months[m].inc+=i.amount;});
+    const mKeys=Object.keys(months).sort();
+    const mLabels=mKeys.map(m=>{const d=new Date(m+'-01');return d.toLocaleDateString('en-GB',{month:'short',year:'2-digit'});});
+    charts.monthly = new Chart(document.getElementById('monthlyChart'),{
+      type:'bar',
+      data:{labels:mLabels,datasets:[
+        {label:'Income',data:mKeys.map(m=>+months[m].inc.toFixed(2)),backgroundColor:'rgba(56,217,169,0.7)',borderRadius:4},
+        {label:'Expenses',data:mKeys.map(m=>+months[m].exp.toFixed(2)),backgroundColor:'rgba(255,95,87,0.65)',borderRadius:4}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': €'+c.parsed.y.toFixed(2)}}},
+        scales:{x:{ticks:{color:'#6b6a72'},grid:{color:'rgba(255,255,255,0.04)'}},
+                y:{ticks:{color:'#6b6a72',callback:v=>'€'+v},grid:{color:'rgba(255,255,255,0.04)'}}}}
+    });
+
+    // Category donut
+    const catTotals={};
+    expenses.forEach(e=>{if(e.category) catTotals[e.category]=(catTotals[e.category]||0)+e.amount;});
+    const ck=Object.keys(catTotals);
+    charts.cat = new Chart(document.getElementById('catChart'),{
+      type:'doughnut',
+      data:{labels:ck,datasets:[{data:ck.map(k=>+catTotals[k].toFixed(2)),backgroundColor:ck.map(k=>catColor[k]||'#888'),borderWidth:0,hoverOffset:4}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'65%',
+        plugins:{legend:{display:true,position:'right',labels:{color:'#6b6a72',font:{size:11,family:"'DM Mono'"},boxWidth:10,padding:10}},
+                 tooltip:{callbacks:{label:c=>c.label+': €'+c.parsed.toFixed(2)}}}}
+    });
+
+    // Budgets
+    const bl=document.getElementById('budget-list');
+    categories.filter(c=>c.name).forEach(c=>{
+      const allocated=c.budget*(c.months||1);
+      const pct=allocated>0?Math.min(c.spent/allocated*100,100):0;
+      const over=c.spent>allocated;
+      bl.innerHTML+=`<div class="budget-row">
+        <div class="budget-header">
+          <span class="budget-name">${c.name}<span class="badge ${over?'badge-over':'badge-ok'}">${over?'over':'ok'}</span></span>
+          <span class="budget-nums">€${c.spent.toFixed(2)} / €${allocated.toFixed(2)}</span>
+        </div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${over?'var(--red)':'var(--green)'}"></div></div>
+      </div>`;
+    });
+
+    // Transactions
+    const allTxns=[...expenses,...incomes].filter(t=>t.date).sort((a,b)=>b.date.localeCompare(a.date));
+    const tl=document.getElementById('txn-list');
+    allTxns.forEach(t=>{
+      const emoji=catEmoji[t.category]||'•';
+      const col=catColor[t.category]||'#888';
+      const isInc=t.type==='inc';
+      tl.innerHTML+=`<div class="txn">
+        <div class="txn-icon" style="background:${col}20;color:${col}">${emoji}</div>
+        <div class="txn-info">
+          <div class="txn-label">${t.label}</div>
+          <div class="txn-meta">${fmtDate(t.date)} · ${t.category||''}${t.account?' · '+t.account:''}</div>
+        </div>
+        <div class="txn-amount" style="color:${isInc?'var(--green)':'var(--red)'}">
+          ${isInc?'+':'−'}€${t.amount.toFixed(2)}
+        </div>
+      </div>`;
+    });
+
+    document.getElementById('last-updated').textContent='updated '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('loading').style.display='none';
+    document.getElementById('app').style.display='block';
+
+  } catch(err) {
+    console.error(err);
+    document.getElementById('loading').style.display='none';
+    document.getElementById('token-screen').style.display='flex';
+    showError('Error: ' + err.message);
+  }
+}
+
+// Auto-load if token saved
+window.addEventListener('load', ()=>{
+  const saved = localStorage.getItem('notion_token');
+  if (saved) {
+    TOKEN = saved;
+    document.getElementById('token-input').value = saved;
+    document.getElementById('token-screen').style.display='none';
+    loadData();
+  }
+});
+
+document.getElementById('token-input').addEventListener('keydown', e=>{ if(e.key==='Enter') startDashboard(); });
+</script>
+</body>
+</html>
